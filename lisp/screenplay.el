@@ -100,6 +100,7 @@
 (define-derived-mode screenplay-mode fundamental-mode "Screenplay"
   "Major mode for editing screenplays.
 \\{screenplay-mode-map}"
+;; Try some kind of command rotation scheme with just tab and enter.
   (define-key screenplay-mode-map "\t\r" 'screenplay-slugline)
   (define-key screenplay-mode-map "\t\t\r" 'screenplay-action-block)
   (define-key screenplay-mode-map "\t\t\t\r" 'screenplay-dialog-block)
@@ -127,7 +128,9 @@ Returns scene heading in upper-case format."
 ;; a pre-existing element.  
 (defun screenplay-slugline (scene)
   (interactive (list (screenplay-read-slugline)))
+  (newline 2)
   (setq left-margin 0)
+  (indent-to-left-margin)
   (insert scene))
 
 (defun screenplay-action-block ()
@@ -185,6 +188,8 @@ Thanks,
 vls
 Emacs Screenplay Mode
 http://www.nongnu.org/screenplay/"))
+
+
 
 (provide 'screenplay)
 ;;; screenplay.el ends here
