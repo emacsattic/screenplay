@@ -1,0 +1,8 @@
+-*- mode: text -*-
+
+$Id$
+
+screenplay.el is free software. Please see the file COPYING for details.
+
+Emacs Screenplay Mode allows you to edit screenplays with on-the-fly 
+formatting.

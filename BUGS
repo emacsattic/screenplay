@@ -1,0 +1,19 @@
+-*- mode: text -*-
+$Id$
+
+Tab completion for sluglines and character name insertion
+has been blown away for some reason.  M-p and arrow keys do cycle
+through the appropriate list.
+
+Editing functions need to be called at end of line of each
+block or line spacing and formatting go wacky.
+
+Printing from the buffer or from a saved screenplay file
+probably won't have appropriate left margin or page line
+length w/o extra processing.  The Unix command pr can be
+used here.
+
+Completion, scene and character display histories are lost
+between sessions.  Session state saving is forthcoming.
+
+Parenthetical remarks are not yet handled.
