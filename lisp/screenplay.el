@@ -73,8 +73,12 @@
 ;; Implement project handling:  Revision control, state control, etc.
 ;; Make the editing commands work from any point within a screenplay
 ;; element instead of end-of-line only.
+;;
 ;; Get all hard coded values into def{custom,var}'s
-
+;;
+;; Implement code for wrylies since I keep getting patches for them.
+;; 
+;; 
 ;; Write a frikkin' screenplay instead of procrastinating with this
 ;; thing.
 
@@ -85,6 +89,7 @@
 (defconst screenplay-author-name  "V. L. Simpson")
 (defconst screenplay-author-email "vls@freeshell.org")
 (defconst screenplay-web-page     "http://www.nongnu.org/screenplay/")
+(defconst vls-homepage "http://vls.freeshell.org")
 (defconst screenplay-bug-address
   "screenplay-bug@nongnu.org"
   "Bug reports for Screenplay Mode go here.")
