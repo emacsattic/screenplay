@@ -36,8 +36,8 @@
 ;; Requires
 
 ;; Constants, customization and variables
-
-(defconst screenplay-version "0.5.1"
+;; FIXME: Bumped version to 0.6.0
+(defconst screenplay-version "0.6.0"
   "Current Emacs Screenplay Mode version number.")
 
 (defconst screenplay-bug-address
@@ -66,20 +66,26 @@ Used by 'screenplay-bug-report'.")
   :type 'integer
   :group 'screenplay)
 
-(defvar screenplay-slugline-properties-list '(slugline t hard nil)
+(defvar screenplay-slugline-properties-list 
+  '(slugline t hard nil point-entered screenplay--point-entered-function)
   "Text properties for scene headings.")
 
 (defvar screenplay-slugline-history ()
-  "Scene heading completion list.")
+  "Scene heading history and completion list.")
+
+(defvar screenplay-slugline-left-margin 0)
 
 (defvar screenplay-character-history ()
-  "Character name completion list.")
+  "Character name history and completion list.")
 
 (defvar screenplay-dialog-fill-column 45)
 
 (defvar screenplay-dialog-left-margin 15)
 
 (defvar screenplay-dialog-char-name-column 25)
+
+(defvar screenplay-last-command nil
+  "Last executed screenplay editing command. ")
 
 (defvar screenplay-mode-abbrev-table nil
   "Abbrev table used while in screenplay mode.")
@@ -113,71 +119,87 @@ Special commands: \\{screenplay-mode-map}"
   (make-local-variable 'screenplay-character-history)
   (make-local-variable 'screenplay-slugline-history)
   (make-local-variable 'screenplay-slugline-properties-list)
+  (make-local-variable 'screenplay-last-command)
+  (add-hook 'pre-command-hook 'dialog-block-properties nil t)
 ;; FIXME: Add filling code.
-;;  (make-local-hook 'after-change-functions)
 ;;  (add-hook 'after-change-functions 'screenplay-refill nil t)
   (run-hooks 'screenplay-mode-hook))
 
 ;; Set up minibuffer completion keymap.
-;; FIXME: I need to define the keymap from scratch.  This works okay
-;; for now.
-(setq screenplay-minibuffer-completion-map
-      (copy-keymap minibuffer-local-completion-map))
+;; FIXME: Work out the minibuffer keymaps.
+;; This probably isn't necessarry.
+;; (setq screenplay-minibuffer-completion-map
+;;       (copy-keymap minibuffer-local-completion-map))
 
-(substitute-key-definition 'minibuffer-complete-word
-                           'self-insert-command
-                           screenplay-minibuffer-completion-map)
-
-;; FIXME: Write an edit-element defun; ie., something to set
-;; appropriate columns, etc., based on whatever element point is in.
+;; (substitute-key-definition 'minibuffer-complete-word
+;;                            'self-insert-command
+;;                            screenplay-minibuffer-completion-map)
 
 ;;; Scene Headings
 
 (defun screenplay--get-slugline ()
-  "Called by screenplay-insert-slugline."
+  "Get scene heading with history recall and TAB completion.
+Called by screenplay-insert-slugline."
   (if current-prefix-arg
-      (let ((prompt (format "Enter a scene heading: ")))
-        (read-from-minibuffer prompt
-                              nil
-                              screenplay-minibuffer-completion-map
-                              nil
-                              'screenplay-slugline-history))
+;;       (let ((prompt (format "Enter a scene heading: ")))
+;;         (read-from-minibuffer prompt
+;;                               nil
+;;                               minibuffer-local-map
+;;                               ;;screenplay-minibuffer-completion-map
+;;                               nil
+;;                               'screenplay-slugline-history))
+      (let ((old-map minibuffer-local-completion-map)
+            (prompt (format "Enter a scene heading: ")))
+        (substitute-key-definition 'minibuffer-complete-word
+                                   'self-insert-command
+                                   minibuffer-local-completion-map)
+        (completing-read prompt
+                         screenplay-slugline-history
+                         nil
+                         nil
+                         nil
+                         screenplay-slugline-history)
+        (setq mini-buffer-local-completion-map old-map)))
     ;; FIXME: Need some way to accept a history list entry,
     ;; bypassing the 'input one element at time' rigamarole
     (let ((elt1 (read-string 
                  "Enter first element (default: INT.): " nil nil "INT."))
-          (elt2 (read-string "Enter location : "))
+          (elt2 (read-string "Enter location: "))
           (elt3 (read-string "Enter time: ")))
-      (concat elt1 " " elt2 " -- " elt3))))
+      (concat elt1 " " elt2 " -- " elt3)))
+
+(set (make-local-variable 'slugline-properties) nil)
 
 (defun screenplay-insert-slugline (slugline)
-    "Insert a scene heading with completion via TAB key.
+    "Insert a scene heading.
 
-History list is available with \\<minibuffer-local-map> \\[previous-history-element] and \\[next-history-element].
+History list of previously entered elements is available with\\<minibuffer-local-map> \\[previous-history-element] and \\[next-history-element].
 
 You will be prompted for scene heading elements in the
-mini-buffer, ie., 'INT.' or 'EXT.', a location, eg., PARK and a time,
-eg., MIDNIGHT.  Some common elements are provided with \\[previous-history-element] and \\[next-history-element].
+mini-buffer, eg., 'INT.' or 'EXT.', a location, eg., PARK and a time,
+eg., MIDNIGHT.
 
-With prefix argument you can add your own specific heading.
+With prefix argument you can add your own specific heading with TAB
+completion with previously entered scene headings.
 
 Capitalization isn't necessary as the function will handle this for
 you."
     (interactive (list (screenplay--get-slugline)))
+    (setq screenplay-last-command "screenplay-insert-slugline")
     (setq left-margin 0)
     (use-hard-newlines -1)
     (newline 2)
     (insert (upcase slugline))
     (newline 2)
     (slugline-properties)
-    (cons slugline  screenplay-slugline-history)
-    nil)
+    (setq slugline-properties t)
+    (setq screenplay-slugline-history
+          (cons (upcase slugline)  screenplay-slugline-history)))
 
 ;; Set slugline text properties
 (defun slugline-properties ()
   "Set scene heading text properties."
-      (widen)
-      (previous-line 2)
+      (forward-line -2)
       (beginning-of-line)
       (setq m1 (point-marker))
       (end-of-line)
@@ -194,37 +216,93 @@ you."
 (defun screenplay-action-block ()
   "Edit a description block."
   (interactive)
+  (setq screenplay-last-command "screenplay-action-block") 
   (use-hard-newlines -1)
-  (newline 2)
-  (setq screenplay-last-command "screenplay-action-block")
   (screenplay-action-margins)
-  (end-of-line))
-  
-;;; Dialog Block
+  (newline 2))
 
-(defun screenplay-character-completion ()
+(defun action--block-properties ())
+
+;;; Dialog Block
+;; FIXME: completion-map is all fu'd.
+(defun screenplay--dialog-character-name ()
   "Get character name for dialog block and add to history list."
-  (let ((prompt (format "Enter character name: ")))
-    (read-from-minibuffer prompt
-                          nil
-                          screenplay-minibuffer-completion-map
-                          nil
-                          'screenplay-character-history)))
+  (let ((old-map minibuffer-local-completion-map)
+        (prompt (format "Enter character name: ")))
+    (substitute-key-definition 'minibuffer-complete-word
+                               'self-insert-command
+                               minibuffer-local-completion-map)
+    (completing-read prompt
+                     screenplay-character-history
+                     nil
+                     nil
+                     nil
+                     screenplay-character-history)
+    (set 'minibuffer-local-completion-map old-map)))
 
 (defun screenplay-dialog-block (name)
-  "Edit a dialog block.
+  "Edit a dialog block.  TAB gives completion
 Argument NAME inserted auto-capitalized."
   (interactive
-   (list (screenplay-character-completion)))
-  (setq left-margin 25)
-  (newline 2)
-  (use-hard-newlines 1 t)  ;Need this to keep auto-fill from screwing up.
+   (list (screenplay--dialog-character-name)))
+  (setq screenplay-last-command "screenplay-dialog-block")
+  (setq left-margin screenplay-dialog-char-name-column)
+  (use-hard-newlines 1 t) ;Need this to keep auto-fill from screwing up.
+  (newline 2)  
   (insert (upcase name))
-  (cons name screenplay-character-history)
+  (setq screenplay-character-history (cons name screenplay-character-history))
   (setq fill-column screenplay-dialog-fill-column
         left-margin screenplay-dialog-left-margin)
-  (newline))
+  (newline)
+  (dialog--char-name-properties)
+  (setq dialog-char-properties t))
 
+(defun dialog--char-name-properties ()
+  "Set properties on dialog block character name"
+  (save-excursion
+    (forward-line -1)
+    (end-of-line)
+    (setq m2 (point-marker))
+    (backward-word 1)
+    (setq m1 (point-marker))
+    (add-text-properties m1 m2 '(dialog-char-name t hard t ))))
+
+(defun dialog-block-properties ()
+  "Set text properties on dialog block."
+  (save-excursion
+   (if (equal screenplay-last-command "screenplay-dialog-block")
+       (progn
+         (setq screenplay-dialog-block nil
+               (re-search-backward "\\([A-Z][A-Z ]+\\)\\([A-Z]+\\)?")
+               (forward-line 1))))))
+
+;;; Internal functions
+;; Handle moving around screenplay buffer.
+(defun screenplay--point-entered-function (&optional old-point new-point)
+  "Scan for screenplay element properties and adjust accordingly."
+  (cond
+   ;; Scene heading
+   ((get-text-property (point) 'slugline)
+    (if slugline-properties
+        nil
+      (progn
+        (setq slugline-properties nil)
+        (setq left-margin screenplay-slugline-left-margin))))
+   ;; dialog block name
+   ((get-text-property (point) 'dialog-char-name)
+    (if dialog-char-properties
+        nil
+      (progn
+        (setq dialog-char-properties nil)
+        (setq left-margin 25)
+        (use-hard-newlines 1 t))))))
+
+;; FIXME: I may not need this.
+(defun screenplay--point-left-function (&optional old-point new-point)
+  "Adjust point-entered function.
+Based on text property value of previous point position.")
+ 
+  
 (defun screenplay-version ()
   "Display current program version in echo area."
   (interactive)
