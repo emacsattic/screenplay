@@ -37,7 +37,7 @@
 
 ;; Constants, customization and variables
 
-(defconst screenplay-version "0.5.0"
+(defconst screenplay-version "0.5.1"
   "Current Emacs Screenplay Mode version number.")
 
 (defconst screenplay-bug-address
@@ -47,7 +47,6 @@ Used by 'screenplay-bug-report'.")
 
 (defgroup screenplay nil
   "Screenplay editing."
-  :load "screenplay"
   :group 'applications
   :link '(emacs-commentary-link :tag "Help" "screenplay"))
 
@@ -67,11 +66,14 @@ Used by 'screenplay-bug-report'.")
   :type 'integer
   :group 'screenplay)
 
+(defvar screenplay-slugline-properties-list '(slugline t hard nil)
+  "Text properties for scene headings.")
+
 (defvar screenplay-slugline-history ()
-  "History list for slugline completion.")
+  "Scene heading completion list.")
 
 (defvar screenplay-character-history ()
-  "Variable containing character name completion list.")
+  "Character name completion list.")
 
 (defvar screenplay-dialog-fill-column 45)
 
@@ -103,10 +105,14 @@ Special commands: \\{screenplay-mode-map}"
   (setq local-abbrev-table screenplay-mode-abbrev-table)
   (setq major-mode 'screenplay-mode)
   (setq mode-name "Screenplay")
+  (make-local-variable 'screenplay-action-left-margin)
+  (make-local-variable 'screenplay-action-fill-column)
+  (make-local-variable 'screenplay-dialog-char-name-column)
   (make-local-variable 'screenplay-dialog-fill-column)
   (make-local-variable 'screenplay-dialog-left-margin)
   (make-local-variable 'screenplay-character-history)
   (make-local-variable 'screenplay-slugline-history)
+  (make-local-variable 'screenplay-slugline-properties-list)
 ;; FIXME: Add filling code.
 ;;  (make-local-hook 'after-change-functions)
 ;;  (add-hook 'after-change-functions 'screenplay-refill nil t)
@@ -121,6 +127,7 @@ Special commands: \\{screenplay-mode-map}"
 (substitute-key-definition 'minibuffer-complete-word
                            'self-insert-command
                            screenplay-minibuffer-completion-map)
+
 ;; FIXME: Write an edit-element defun; ie., something to set
 ;; appropriate columns, etc., based on whatever element point is in.
 
@@ -161,16 +168,28 @@ you."
     (use-hard-newlines -1)
     (newline 2)
     (insert (upcase slugline))
+    (newline 2)
+    (slugline-properties)
     (cons slugline  screenplay-slugline-history)
     nil)
 
+;; Set slugline text properties
+(defun slugline-properties ()
+  "Set scene heading text properties."
+      (widen)
+      (previous-line 2)
+      (beginning-of-line)
+      (setq m1 (point-marker))
+      (end-of-line)
+      (setq m2 (point-marker))
+      (add-text-properties m1 m2 screenplay-slugline-properties-list))
+
 ;;; Action Block 
-;; FIXME: Get hardwired values out.
 
 (defun screenplay-action-margins ()
   "Set left|right margins for action block."
   (setq left-margin screenplay-action-left-margin
-        fill-column screenplay-fill-column))
+        fill-column screenplay-action-fill-column))
 
 (defun screenplay-action-block ()
   "Edit a description block."
@@ -201,7 +220,7 @@ Argument NAME inserted auto-capitalized."
   (newline 2)
   (use-hard-newlines 1 t)  ;Need this to keep auto-fill from screwing up.
   (insert (upcase name))
-  (cons slugline  screenplay-character-history)
+  (cons name screenplay-character-history)
   (setq fill-column screenplay-dialog-fill-column
         left-margin screenplay-dialog-left-margin)
   (newline))
