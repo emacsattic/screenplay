@@ -2,10 +2,10 @@
 
 ;; $Id$
 
-;; Copyright (C) 2000, 2001, 2002, 2003  V. L. Simpson
+;; Copyright (C) 2000, 2001, 2002, 2003, 2004  Vance L. Simpson
 
-;; Author: V. L. Simpson <vls@m-net.arbornet.org>
-;; Keywords:
+;; Author: V. L. Simpson <vls@freeshell.org>
+;; Keywords: 
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -22,27 +22,54 @@
 ;; the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 ;; Boston, MA 02111-1307, USA.
 
-;;; Commentary: This is easy to use.
-;;; TAB-return enters a scene heading; TAB-TAB-return sets up writing
-;;; an action block and TAB-TAB-TAB-return puts one in a dialog
-;;; writing mode.
-;;; WARNING: This is massively incomplete.  Don't blame me if you
-;;; don't win an Academy(TM) award using this thing.
-;;; 
+;;; Commentary:
 ;; 
+;; Massive complete start-over re-write back-to-the-drawing-board
+;; start-from-square-one bottom-of-the-barrel-looking-up release.
+;;
+;; Installing and using screenplay.el:
+;; Put this file somewhere on your emacs load-path.
+;; Load the file with 'load-libray RET screenplay RET'.
+;; Open up your Academy Award Winner(TM), M-x screenplay-mode and have
+;; at it.
+;; The TAB and RET keys let you insert and edit the basic screenplay
+;; elements.
+;;
+;; TAB-RET asks for and inserts a scene heading, e.g., INT. HOUSE -- DAY.
+;;
+;; TAB-TAB-RET moves into action block mode, e.g., Describing the
+;; house exploding.
+;;
+;; TAB-TAB-TAB-RET does the dialog thing, e.g.,
+;;         BOB
+;;   Gee, the house just
+;;   exploded.
+;;
+;; Bugs and caveats:
+;;
+;; There is no way to go back and re-edit something according to it's
+;; screenplay element function.  I'm working on it.  So get it right
+;; the first time. 8-]
+;;
+;; Don't enter any spurious newlines when finished editing any one
+;; particular element.  Just hit the key combo for the next thing you
+;; want to do, e.g., INT. HOUSE -- DAY(Type TAB-TAB-RET to go into an
+;; action block.
+;;
+
+;; Remember kiddies:
+;; "Nobody knows anything" -- William Goldman _Adventures in the Screentrade_
 
 ;;; Code:
 
-;; Requires
-
-;; Constants, customization and variables
-(defconst screenplay-version "0.6.1"
+(defconst screenplay-version "0.7.0"
   "Current Emacs Screenplay Mode version number.")
-
+(defconst screenplay-author-name  "V. L. Simpson")
+(defconst screenplay-author-email "vls@freeshell.org")
+(defconst screenplay-web-page     "http://www.nongnu.org/screenplay/")
 (defconst screenplay-bug-address
   "screenplay-bug@mail.freesoftware.fsf.org"
-  "Bug reports for Screenplay Mode go here.
-Used by 'screenplay-bug-report'.")
+  "Bug reports for Screenplay Mode go here.")
 
 (defgroup screenplay nil
   "Screenplay editing."
@@ -52,238 +79,90 @@ Used by 'screenplay-bug-report'.")
 (defcustom screenplay-mode-hook 'auto-fill-mode
   "List of functions to call when entering Screenplay Mode."
   :type 'hook
-  :group 'screenplay
-  :options '(flyspell-mode))
+  :group 'screenplay)
 
-(defcustom screenplay-action-left-margin 0
-  "*Left margin for action block."
+(defcustom screenplay-left-margin 0
+  "Left margin for scene headings and action blocks" 
   :type 'integer
   :group 'screenplay)
 
-(defcustom screenplay-action-fill-column 65
-  "*Fill column for action block."
+(defcustom screenplay-right-margin 50
+  "Right margin for scene-headings and action blocks"
   :type 'integer
   :group 'screenplay)
 
-(defvar screenplay-slugline-properties-list
-  '(slugline t hard nil point-entered screenplay--point-entered-function)
-  "Text properties for scene headings.")
+;; I'll give internal var's a 'scrn' prefix.
+(defvar scrn-scene-hist ()
+  "History list for scene headings.")
 
-(defvar screenplay-slugline-history ()
-  "Scene heading history and completion list.")
+(defvar scrn-dialog-name-hist ())
 
-(defvar screenplay-slugline-left-margin 0)
-
-(defvar screenplay-character-history ()
-  "Character name history and completion list.")
-
-(defvar screenplay-dialog-fill-column 45)
-
-(defvar screenplay-dialog-left-margin 15)
-
-(defvar screenplay-dialog-char-name-column 25)
-
-(defvar screenplay-last-command nil
-  "Last executed screenplay editing command.")
-
-(defvar screenplay-mode-abbrev-table nil
-  "Abbrev table used while in screenplay mode.")
-
-(define-abbrev-table 'screenplay-mode-abbrev-table ())
-
-(defvar screenplay-mode-map nil
-  "Key bindings for Screenplay Mode.")
-
-(if screenplay-mode-map
-    ()
-  (setq screenplay-mode-map (make-sparse-keymap))
-  (define-key screenplay-mode-map "\t\r" 'screenplay-insert-slugline)
-  (define-key screenplay-mode-map "\t\t\r" 'screenplay-action-block)
-  (define-key screenplay-mode-map "\t\t\t\r" 'screenplay-dialog-block))
-
-(defun screenplay-mode ()
+(define-derived-mode screenplay-mode fundamental-mode "Screenplay"
   "Major mode for editing screenplays.
-Special commands: \\{screenplay-mode-map}"
-  (interactive)
-  (kill-all-local-variables)
-  (use-local-map screenplay-mode-map)
-  (setq local-abbrev-table screenplay-mode-abbrev-table)
-  (setq major-mode 'screenplay-mode)
-  (setq mode-name "Screenplay")
-  (make-local-variable 'screenplay-action-left-margin)
-  (make-local-variable 'screenplay-action-fill-column)
-  (make-local-variable 'screenplay-dialog-char-name-column)
-  (make-local-variable 'screenplay-dialog-fill-column)
-  (make-local-variable 'screenplay-dialog-left-margin)
-  (make-local-variable 'screenplay-character-history)
-  (make-local-variable 'screenplay-slugline-history)
-  (make-local-variable 'screenplay-slugline-properties-list)
-  (make-local-variable 'screenplay-last-command)
-  (add-hook 'pre-command-hook 'dialog-block-properties nil t)
-;; FIXME: Add filling code.
-;;  (add-hook 'after-change-functions 'screenplay-refill nil t)
-  (run-hooks 'screenplay-mode-hook))
+\\{screenplay-mode-map}"
+  (define-key screenplay-mode-map "\t\r" 'screenplay-slugline)
+  (define-key screenplay-mode-map "\t\t\r" 'screenplay-action-block)
+  (define-key screenplay-mode-map "\t\t\t\r" 'screenplay-dialog-block)
+  (make-local-variable 'scrn-scene-hist)
+  (make-local-variable 'screenplay-right-margin)
+  (make-local-variable 'screenplay-left-margin)
+  (make-local-variable 'scrn-dialog-name-hist)
+  )
 
-;;; Scene Headings
+(defun screenplay-read-slugline ()
+  "Get scene heading.
+Returns scene heading in upper-case format."
+  (let ((scene-heading 
+         (let ((prompt "Enter scene heading: "))
+           (read-from-minibuffer prompt 
+                                 nil           ;initial-contents
+                                 nil           ;keymap
+                                 nil           ;read
+                                 'scrn-scene-hist   ;hist
+                                 nil           ;default
+                                 nil))))       ;inherit-input-method
+    (upcase scene-heading)))
 
-(defun screenplay--get-slugline ()
-  "Get scene heading with history recall and TAB completion.
-Called by `screenplay-insert-slugline'."
-  (substitute-key-definition 'minibuffer-complete-word
-                             'self-insert-command
-                             minibuffer-local-completion-map)
-  (if current-prefix-arg
-      (let ((prompt (format "Enter a scene heading: ")))
-        (completing-read prompt
-                         screenplay-slugline-history
-                         nil
-                         nil
-                         nil
-                         screenplay-slugline-history))
-    ;; FIXME: Need some way to accept a history list entry,
-    ;; bypassing the 'input one element at time' rigamarole
-    (let ((elt1 (read-string
-                 "Enter first element (default: INT.): " nil nil "INT."))
-          (elt2 (read-string "Enter location: "))
-          (elt3 (read-string "Enter time: ")))
-      (concat elt1 " " elt2 " -- " elt3))))
-
-(set (make-local-variable 'slugline-properties) nil)
-
-(defun screenplay-insert-slugline (slugline)
-  "Insert SLUGLINE as a scene heading.
-
-History list of previously entered elements is available with\\<minibuffer-local-map> \\[previous-history-element] and \\[next-history-element].
-
-You will be prompted for scene heading elements in the
-mini-buffer, eg., 'INT.' or 'EXT.', a location, eg., PARK and a time,
-eg., MIDNIGHT.
-
-With prefix argument you can add your own specific heading with TAB
-completion with previously entered scene headings.
-
-Capitalization isn't necessary as the function will handle this for
-you."
-  (interactive (list (screenplay--get-slugline)))
-  (setq screenplay-last-command "screenplay-insert-slugline")
+;; FIXME: Try prefix arg to set margin and fill-column for re-editing
+;; a pre-existing element.  
+(defun screenplay-slugline (scene)
+  (interactive (list (screenplay-read-slugline)))
   (setq left-margin 0)
-  (use-hard-newlines -1)
-  (newline 2)
-  (insert (upcase slugline))
-  (newline 2)
-  (slugline-properties)
-  (setq slugline-properties t)
-  (setq screenplay-slugline-history
-        (cons (upcase slugline)  screenplay-slugline-history))
-  (define-key minibuffer-local-completion-map [32]
-    'minibuffer-complete-word))
-
-;; Set slugline text properties
-(defun slugline-properties ()
-  "Set scene heading text properties."
-      (forward-line -2)
-      (beginning-of-line)
-      (setq m1 (point-marker))
-      (end-of-line)
-      (setq m2 (point-marker))
-      (add-text-properties m1 m2 screenplay-slugline-properties-list))
-
-;;; Action Block
-
-(defun screenplay-action-margins ()
-  "Set left|right margins for action block."
-  (setq left-margin screenplay-action-left-margin
-        fill-column screenplay-action-fill-column))
+  (insert scene))
 
 (defun screenplay-action-block ()
   "Edit a description block."
   (interactive)
-  (setq screenplay-last-command "screenplay-action-block")
+  (newline 2)
+  (setq left-margin 0)
+  (setq fill-column 50)
   (use-hard-newlines -1)
-  (screenplay-action-margins)
-  (newline 2))
+  (indent-to-left-margin))
 
-(defun action--block-properties ()
-  "Set text properties on action block.")
-
-;;; Dialog Block
-(defun screenplay--dialog-character-name ()
-  "Get character name for dialog block and add to history list."
-  (substitute-key-definition 'minibuffer-complete-word
-                             'self-insert-command
-                             minibuffer-local-completion-map)
-  (let ((prompt (format "Enter character name: ")))
-    (completing-read prompt
-                     screenplay-character-history
-                     nil
-                     nil
-                     nil
-                     screenplay-character-history)))
+(defun screenplay-dialog-char-name ()
+  (let ((char-name
+         (let ((prompt "Enter character name: "))
+           (read-from-minibuffer prompt
+                                 nil
+                                 nil
+                                 nil
+                                 'scrn-dialog-name-hist
+                                 nil
+                                 nil))))
+    (upcase char-name)))
 
 (defun screenplay-dialog-block (name)
-  "Edit a dialog block.
-TAB gives completion Argument NAME inserted auto-capitalized."
-  (interactive
-   (list (screenplay--dialog-character-name)))
-  (setq screenplay-last-command "screenplay-dialog-block")
-  (setq left-margin screenplay-dialog-char-name-column)
-  (use-hard-newlines 1 t) ;Need this to keep auto-fill from screwing up.
+  (interactive (list (screenplay-dialog-char-name)))
+  (use-hard-newlines 1 t)
   (newline 2)
-  (insert (upcase name))
-  (setq screenplay-character-history (cons name screenplay-character-history))
-  (setq fill-column screenplay-dialog-fill-column
-        left-margin screenplay-dialog-left-margin)
-  (newline)
-  (dialog--char-name-properties)
-  (setq dialog-char-properties t)
-  (define-key minibuffer-local-completion-map [32] 'minibuffer-complete-word))
+  (setq left-margin 20)
+  (indent-to-left-margin)
+  (insert name)
+  (newline 1)
+  (setq left-margin 10)
+  (indent-to-left-margin)
+  (setq fill-column 40))
 
-(defun dialog--char-name-properties ()
-  "Set properties on dialog block character name."
-  (save-excursion
-    (forward-line -1)
-    (end-of-line)
-    (setq m2 (point-marker))
-    (backward-word 1)
-    (setq m1 (point-marker))
-    (add-text-properties m1 m2 '(dialog-char-name t hard t ))))
-
-(defun dialog-block-properties ()
-  "Set text properties on dialog block."
-  (save-excursion
-   (if (equal screenplay-last-command "screenplay-dialog-block")
-       (progn
-         (setq screenplay-dialog-block nil
-               (re-search-backward "\\([A-Z][A-Z ]+\\)\\([A-Z]+\\)?")
-               (forward-line 1))))))
-
-;;; Internal functions
-;; Handle moving around screenplay buffer.
-(defun screenplay--point-entered-function (&optional old-point new-point)
-  "Scan for screenplay element properties and adjust accordingly."
-  (cond
-   ;; Scene heading
-   ((get-text-property (point) 'slugline)
-    (if slugline-properties
-        nil
-      (progn
-        (setq slugline-properties nil)
-        (setq left-margin screenplay-slugline-left-margin))))
-   ;; dialog block name
-   ((get-text-property (point) 'dialog-char-name)
-    (if dialog-char-properties
-        nil
-      (progn
-        (setq dialog-char-properties nil)
-        (setq left-margin 25)
-        (use-hard-newlines 1 t))))))
-
-;; FIXME: I may not need this.
-(defun screenplay--point-left-function (&optional old-point new-point)
-  "Adjust point-entered function.
-Based on text property value of previous point position.")
- 
-  
 (defun screenplay-version ()
   "Display current program version in echo area."
   (interactive)
@@ -305,7 +184,7 @@ I'll try to fix it as soon as possible.
 Thanks,
 vls
 Emacs Screenplay Mode
-http://fs.fsf.org/screenplay"))
+http://www.nongnu.org/screenplay/"))
 
 (provide 'screenplay)
 ;;; screenplay.el ends here
